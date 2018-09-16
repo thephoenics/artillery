@@ -327,21 +327,21 @@ function runScenario(script, intermediate, runState) {
     runState.scenarioEvents.on('error', function(errCode) {
       intermediate.addError(errCode);
     });
-    runState.scenarioEvents.on('request', function() {
-      intermediate.newRequest();
+    runState.scenarioEvents.on('request', function(metricsContext) {
+      intermediate.newRequest(metricsContext);
 
       runState.pendingRequests++;
     });
     runState.scenarioEvents.on('match', function() {
       intermediate.addMatch();
     });
-    runState.scenarioEvents.on('response', function(delta, code, uid) {
+    runState.scenarioEvents.on('response', function(delta, code, uid, metricsContext) {
       intermediate.completedRequest();
       intermediate.addLatency(delta);
       intermediate.addCode(code);
 
       let entry = [Date.now(), uid, delta, code];
-      intermediate.addEntry(entry);
+      intermediate.addEntry(entry, metricsContext);
 
       runState.pendingRequests--;
     });
@@ -363,12 +363,16 @@ function runScenario(script, intermediate, runState) {
         script.scenarios[i].name,
         script.scenarios[i].weight);
 
-  intermediate.newScenario(script.scenarios[i].name || i);
+  const scenarioName = script.scenarios[i].name || i;
+  const metricsContext = Object.assign({'scenario' : scenarioName}, script.scenarios[i].metricsContext || {});
+
+  intermediate.newScenario(scenarioName, metricsContext);
 
   const scenarioStartedAt = process.hrtime();
-  const scenarioContext = createContext(script);
+  const scenarioContext = createContext(script, metricsContext);
   const finish = process.hrtime(start);
   const runScenarioDelta = (finish[0] * 1e9) + finish[1];
+  
   debugPerf('runScenarioDelta: %s', Math.round(runScenarioDelta / 1e6 * 100) / 100);
   runState.compiledScenarios[i](scenarioContext, function(err, context) {
     runState.pendingScenarios--;
@@ -377,7 +381,7 @@ function runScenario(script, intermediate, runState) {
     } else {
       const scenarioFinishedAt = process.hrtime(scenarioStartedAt);
       const delta = (scenarioFinishedAt[0] * 1e9) + scenarioFinishedAt[1];
-      intermediate.addScenarioLatency(delta);
+      intermediate.addScenarioLatency(delta, metricsContext);
       intermediate.completedScenario();
     }
   });
@@ -386,7 +390,7 @@ function runScenario(script, intermediate, runState) {
 /**
  * Create initial context for a scenario.
  */
-function createContext(script) {
+function createContext(script, metricsContext) {
   const INITIAL_CONTEXT = {
     vars: {
       target: script.config.target,
@@ -396,7 +400,8 @@ function createContext(script) {
     funcs: {
       $randomNumber: $randomNumber,
       $randomString: $randomString
-    }
+    },
+    metricsContext
   };
   let result = _.cloneDeep(INITIAL_CONTEXT);
 

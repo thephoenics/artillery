@@ -437,10 +437,12 @@ HttpEngine.prototype.step = function step(requestSpec, ee, opts) {
           });
         }
 
+        const metricsContext = Object.assign({request: requestParams.name || requestParams.url}, context.metricsContext, requestParams.metricsContext);
+
         request(requestParams, maybeCallback)
           .on('request', function(req) {
-            debugRequests("request start: %s", req.path);
-            ee.emit('request');
+            debugRequests('request start: %s', req.path);
+            ee.emit('request', metricsContext);
 
             const startedAt = process.hrtime();
 
@@ -448,8 +450,8 @@ HttpEngine.prototype.step = function step(requestSpec, ee, opts) {
               let code = res.statusCode;
               const endedAt = process.hrtime(startedAt);
               let delta = (endedAt[0] * 1e9) + endedAt[1];
-              debugRequests("request end: %s", req.path);
-              ee.emit('response', delta, code, context._uid);
+              debugRequests('request end: %s', req.path);
+              ee.emit('response', delta, code, context._uid, metricsContext);
             });
           }).on('end', function() {
             context._successCount++;

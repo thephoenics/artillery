@@ -91,8 +91,14 @@ function Stats() {
   return this.reset();
 }
 
-Stats.prototype.addEntry = function(entry) {
+Stats.prototype.addEntry = function(entry, metricsContext) {
   this._entries.push(entry);
+  
+  if (!metricsContext) {
+    metricsContext = {};
+  }
+
+  this._metricsEntries.push([].concat(entry, [metricsContext]));
   return this;
 };
 
@@ -100,7 +106,7 @@ Stats.prototype.getEntries = function() {
   return this._entries;
 };
 
-Stats.prototype.newScenario = function(name) {
+Stats.prototype.newScenario = function(name, metricsContext) {
   if (this._scenarioCounter[name]) {
     this._scenarioCounter[name]++;
   } else {
@@ -108,6 +114,12 @@ Stats.prototype.newScenario = function(name) {
   }
 
   this._generatedScenarios++;
+  
+  if (!metricsContext) {
+    metricsContext = {};
+  }
+
+  this._metricsScenarioTimestamps.push([Date.now(), name, metricsContext]);
   return this;
 };
 
@@ -132,8 +144,14 @@ Stats.prototype.addError = function(errCode) {
   return this;
 };
 
-Stats.prototype.newRequest = function() {
+Stats.prototype.newRequest = function(metricsContext) {
   this._requestTimestamps.push(Date.now());
+
+  if (!metricsContext) {
+    metricsContext = {};
+  }
+
+  this._metricsRequestTimestamps.push([Date.now(), metricsContext]);
   return this;
 };
 
@@ -147,8 +165,14 @@ Stats.prototype.addLatency = function(delta) {
   return this;
 };
 
-Stats.prototype.addScenarioLatency = function(delta) {
+Stats.prototype.addScenarioLatency = function(delta, metricsContext) {
   this._scenarioLatencies.push(delta);
+
+  if (!metricsContext) {
+    metricsContext = {};
+  }
+
+  this._metricsScenarioLatencies.push([Date.now(), delta, metricsContext]);
   return this;
 };
 
@@ -160,6 +184,19 @@ Stats.prototype.addMatch = function() {
 Stats.prototype.clone = function() {
   return L.cloneDeep(this);
 };
+
+Stats.prototype.metrics = function() {
+  const result = {};
+
+  result.timestamp = new Date().toISOString();
+  result.latencies = this._metricsEntries;
+  result.startTimestamps = this._metricsRequestTimestamps;
+  result.scenarioTimestamps = this._metricsScenarioTimestamps;
+  result.scenarioLatencies = this._metricsScenarioLatencies;
+  result.errors = this.errors;
+
+  return result;
+}
 
 Stats.prototype.report = function() {
   let result = {};
@@ -261,6 +298,10 @@ Stats.prototype.reset = function() {
   this._concurrency = null;
   this._pendingRequests = 0;
   this._scenarioCounter = {};
+  this._metricsEntries = [];
+  this._metricsScenarioTimestamps = [];
+  this._metricsRequestTimestamps = [];
+  this._metricsScenarioLatencies = [];
   return this;
 };
 
