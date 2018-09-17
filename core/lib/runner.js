@@ -22,7 +22,8 @@ const wl = require('./weighted-pick');
 const Engines = {
   http: {},
   ws: {},
-  socketio: {}
+  socketio: {},
+  signalr: {}
 };
 
 JSCK.Draft4 = JSCK.draft4;
@@ -311,11 +312,11 @@ function runScenario(script, intermediate, runState) {
     runState.picker = wl(script.scenarios);
 
     runState.scenarioEvents = new EventEmitter();
-    runState.scenarioEvents.on('counter', function(name, value) {
-      intermediate.counter(name, value);
+    runState.scenarioEvents.on('counter', function(name, value, metricsContext) {
+      intermediate.counter(name, value, metricsContext);
     });
-    runState.scenarioEvents.on('histogram', function(name, value) {
-      intermediate.addCustomStat(name, value);
+    runState.scenarioEvents.on('histogram', function(name, value, metricsContext) {
+      intermediate.addCustomStat(name, value, metricsContext);
     });
     // TODO: Deprecate
     runState.scenarioEvents.on('customStat', function(stat) {

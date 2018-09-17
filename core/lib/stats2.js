@@ -119,7 +119,7 @@ Stats.prototype.newScenario = function(name, metricsContext) {
     metricsContext = {};
   }
 
-  this._metricsScenarioTimestamps.push([Date.now(), name, metricsContext]);
+  this.counter('scenario.start', 1, metricsContext);
   return this;
 };
 
@@ -151,7 +151,7 @@ Stats.prototype.newRequest = function(metricsContext) {
     metricsContext = {};
   }
 
-  this._metricsRequestTimestamps.push([Date.now(), metricsContext]);
+  this.counter('request.start', 1, metricsContext);
   return this;
 };
 
@@ -172,7 +172,7 @@ Stats.prototype.addScenarioLatency = function(delta, metricsContext) {
     metricsContext = {};
   }
 
-  this._metricsScenarioLatencies.push([Date.now(), delta, metricsContext]);
+  this.addCustomStat('scenario.latency', delta, metricsContext);
   return this;
 };
 
@@ -190,10 +190,9 @@ Stats.prototype.metrics = function() {
 
   result.timestamp = new Date().toISOString();
   result.latencies = this._metricsEntries;
-  result.startTimestamps = this._metricsRequestTimestamps;
-  result.scenarioTimestamps = this._metricsScenarioTimestamps;
-  result.scenarioLatencies = this._metricsScenarioLatencies;
   result.errors = this.errors;
+  result.histograms = this._metricsHistograms;
+  result.counters = this._metricsCounters;
 
   return result;
 }
@@ -248,11 +247,12 @@ Stats.prototype.report = function() {
   result.customStats = {};
   L.each(this._customStats, function(ns, name) {
     result.customStats[name] = {
-      min: round(L.min(ns), 1),
-      max: round(L.max(ns), 1),
-      median: round(sl.median(ns), 1),
-      p95: round(sl.percentile(ns, 0.95), 1),
-      p99: round(sl.percentile(ns, 0.99), 1)
+      min: round(L.min(ns) / 1e6, 1),
+      max: round(L.max(ns) / 1e6, 1),
+      median: round(sl.median(ns) / 1e6, 1),
+      p95: round(sl.percentile(ns, 0.95) / 1e6, 1),
+      p99: round(sl.percentile(ns, 0.99) / 1e6, 1),
+      count: ns.length,
     };
   });
   result.counters = this._counters;
@@ -265,20 +265,31 @@ Stats.prototype.report = function() {
   return result;
 };
 
-Stats.prototype.addCustomStat = function(name, n) {
+Stats.prototype.addCustomStat = function(name, n, metricsContext) {
   if (!this._customStats[name]) {
     this._customStats[name] = [];
   }
 
+  if (!this._metricsHistograms[name]) {
+    this._metricsHistograms[name] = [];
+  }
+
   this._customStats[name].push(n);
+  this._metricsHistograms[name].push([Date.now(), n, metricsContext]);
   return this;
 };
 
-Stats.prototype.counter = function(name, value) {
+Stats.prototype.counter = function(name, value, metricsContext) {
   if (!this._counters[name]) {
     this._counters[name] = 0;
   }
+
+  if (!this._metricsCounters[name]) {
+    this._metricsCounters[name] = [];
+  }
+  
   this._counters[name] += value;
+  this._metricsCounters[name].push([Date.now(), value, metricsContext]);
   return this;
 };
 
@@ -299,9 +310,8 @@ Stats.prototype.reset = function() {
   this._pendingRequests = 0;
   this._scenarioCounter = {};
   this._metricsEntries = [];
-  this._metricsScenarioTimestamps = [];
-  this._metricsRequestTimestamps = [];
-  this._metricsScenarioLatencies = [];
+  this._metricsHistograms = {};
+  this._metricsCounters = {};
   return this;
 };
 
