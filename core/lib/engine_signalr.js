@@ -63,7 +63,7 @@ class SignalREngine {
 
     const signalrOpts = template(this.signalrOpts, context);
     client = new SignalrClient(signalrOpts.target, [hub], signalrOpts.reconnectTimeout, true);
-    client.queryString = signalrOpts.query;
+    client.queryString = _.extend(signalrOpts.query, (context.step && context.step.query ? context.step.query : {}));
 
     client.serviceHandlers = {
       bound: () => this._addCounter(ee, 'bound', 1, {
@@ -79,12 +79,21 @@ class SignalREngine {
       connected: () => {},
       connectionLost: () => this._addCounter(ee, 'connectionLost', 1, _.extend({hub}, context.metricsContext || {})),
       disconnected: () => this._addCounter(ee, 'disconnected', 1, _.extend({hub}, context.metricsContext || {})),
-      onerror: (error) => this._addCounter(ee, 'error', 1, _.extend({hub, error}, context.metricsContext || {})),
+      onerror: (error) => {
+        this._addCounter(ee, 'error', 1, _.extend({hub, error}, context.metricsContext || {}));
+        cb(error, null);
+      },
       messageReceived: (message) => {
         context.__receivedMessageCount++;
       },
-      bindingError: (error) => this._addCounter(ee, 'bindingError', 1, _.extend({hub, error}, context.metricsContext || {})),
-      onUnauthorized: (res) => this._addCounter(ee, 'unauthorized', 1, _.extend({hub, res}, context.metricsContext || {})),
+      bindingError: (error) => {
+        this._addCounter(ee, 'bindingError', 1, _.extend({hub, error}, context.metricsContext || {}));
+        cb(error, null);
+      },
+      onUnauthorized: (res) => {
+        this._addCounter(ee, 'unauthorized', 1, _.extend({hub}, context.metricsContext || {}));
+        cb('Unauthorized', null);
+      },
       reconnecting: (retry) => {
         const continueRetry = this.signalrOpts.retryCount == -1 || retry.count <= this.signalrOpts.retryCount;
         this._addCounter(ee, 'reconnecting', 1, _.extend({
@@ -158,6 +167,9 @@ class SignalREngine {
 
     const initializeStep = (context, callback) => {
       step.hub = template(step.hub, context) || null;
+      step.query = template(step.query, context) || {};
+      
+      context.step = step;
 
       this.initializeClient(ee, step.hub, context, (err, client) => {
         if (err) {
