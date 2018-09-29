@@ -30,7 +30,8 @@ class SignalREngine {
       reconnectTimeout: 10,
       autoconnect: false,
       query: {},
-      retryCount: -1
+      retryCount: -1,
+      clientTimeout: 10
     }, this.config.signalr);
 
     this.httpDelegate = new EngineHttp(script);
@@ -66,9 +67,9 @@ class SignalREngine {
     client.queryString = _.extend(signalrOpts.query, (context.step && context.step.query ? context.step.query : {}));
 
     client.serviceHandlers = {
-      bound: () => this._addCounter(ee, 'bound', 1, {
-        hub
-      }),
+      bound: () => {
+        return this._addCounter(ee, 'bound', 1, { hub });
+      },
       connectFailed: (error) => {
         this._addCounter(ee, 'connectFailed', 1, {
           hub,
@@ -76,9 +77,14 @@ class SignalREngine {
         });
         cb(error, null);
       },
-      connected: () => {},
-      connectionLost: () => this._addCounter(ee, 'connectionLost', 1, _.extend({hub}, context.metricsContext || {})),
-      disconnected: () => this._addCounter(ee, 'disconnected', 1, _.extend({hub}, context.metricsContext || {})),
+      connected: () => {
+      },
+      connectionLost: () => {
+        return this._addCounter(ee, 'connectionLost', 1, _.extend({hub}, context.metricsContext || {}))
+      },
+      disconnected: () => {
+        return this._addCounter(ee, 'disconnected', 1, _.extend({hub}, context.metricsContext || {}))
+      },
       onerror: (error) => {
         this._addCounter(ee, 'error', 1, _.extend({hub, error}, context.metricsContext || {}));
         cb(error, null);
@@ -104,7 +110,9 @@ class SignalREngine {
 
         return !continueRetry;
       },
-      reconnected: (connection) => this._addCounter(ee, 'reconnected', 1, _.extend({hub}, context.metricsContext || {})),
+      reconnected: (connection) => {
+        this._addCounter(ee, 'reconnected', 1, _.extend({hub}, context.metricsContext || {}))
+      },
     };
 
     context.clients[hub] = client;
@@ -273,15 +281,26 @@ class SignalREngine {
 
     const startedAt = process.hrtime();
 
+    let connected = false;
+
     client.serviceHandlers.connected = () => {
+      connected = true;
       const endedAt = process.hrtime(startedAt);
       const delta = (endedAt[0] * 1e9) + endedAt[1];
 
       this._addHistogram(ee, 'connected', delta, {
         hub: step.hub
       });
+
       return callback(null, context);
     };
+
+    setTimeout(() => {
+      if (!connected) {
+        this._addCounter(ee, 'client_timeout', 1, { hub: step.hub })
+        callback('timedout', client);
+      }
+    }, this.signalrOpts.clientTimeout * 1000);
 
     client.start();
   }

@@ -274,8 +274,10 @@ function run(script, ee, options, runState) {
 
         intermediate.free();
 
-        let aggregateReport = Stats.combine(aggregate).report();
-        return ee.emit('done', aggregateReport);
+        setTimeout(() => {
+          let aggregateReport = Stats.combine(aggregate).report();
+          return ee.emit('done', aggregateReport);
+        }, 5000);
       } else {
         debug('Pending requests: %s', runState.pendingRequests);
         debug('Pending scenarios: %s', runState.pendingScenarios);
