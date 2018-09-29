@@ -31,7 +31,8 @@ class SignalREngine {
       autoconnect: false,
       query: {},
       retryCount: -1,
-      clientTimeout: 10
+      connectTimeout: 10,
+      connectRetryCount: 5
     }, this.config.signalr);
 
     this.httpDelegate = new EngineHttp(script);
@@ -279,9 +280,10 @@ class SignalREngine {
   _onStepConnect(requestSpec, ee, client, context, callback) {
     const step = requestSpec.connect;
 
-    const startedAt = process.hrtime();
+    let startedAt = process.hrtime();
 
     let connected = false;
+    let retrialCount = this.signalrOpts.connectRetryCount;
 
     client.serviceHandlers.connected = () => {
       connected = true;
@@ -295,12 +297,24 @@ class SignalREngine {
       return callback(null, context);
     };
 
-    setTimeout(() => {
-      if (!connected) {
-        this._addCounter(ee, 'client_timeout', 1, { hub: step.hub })
-        callback('timedout', client);
+    const intervalId = setInterval(() => {
+      if (connected) {
+        clearInterval(intervalId);
+        return;
       }
-    }, this.signalrOpts.clientTimeout * 1000);
+
+      if (retrialCount === 0) {
+        this._addCounter(ee, 'client_timeout', 1, { hub: step.hub });
+        callback('timedout', client);
+        clearInterval(intervalId);
+      } else {
+        retrialCount--;
+        this._addCounter(ee, 'retry_connect', 1, { hub: step.hub });
+        client.end();
+        startedAt = process.hrtime();
+        client.start();
+      }
+    }, this.signalrOpts.connectTimeout * 1000);
 
     client.start();
   }
