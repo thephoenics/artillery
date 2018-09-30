@@ -297,24 +297,31 @@ class SignalREngine {
       return callback(null, context);
     };
 
-    const intervalId = setInterval(() => {
-      if (connected) {
-        clearInterval(intervalId);
-        return;
-      }
+    // const intervalId = setInterval(() => {
+    //   if (connected) {
+    //     clearInterval(intervalId);
+    //     return;
+    //   }
 
-      if (retrialCount === 0) {
+    //   if (retrialCount === 0) {
+    //     this._addCounter(ee, 'client_timeout', 1, { hub: step.hub });
+    //     callback('timedout', client);
+    //     clearInterval(intervalId);
+    //   } else {
+    //     retrialCount--;
+    //     this._addCounter(ee, 'retry_connect', 1, { hub: step.hub });
+    //     client.end();
+    //     startedAt = process.hrtime();
+    //     client.start();
+    //   }
+    // }, this.signalrOpts.connectTimeout * 1000);
+
+    setTimeout(() => {
+      if (!connected) {
         this._addCounter(ee, 'client_timeout', 1, { hub: step.hub });
         callback('timedout', client);
-        clearInterval(intervalId);
-      } else {
-        retrialCount--;
-        this._addCounter(ee, 'retry_connect', 1, { hub: step.hub });
-        client.end();
-        startedAt = process.hrtime();
-        client.start();
       }
-    }, this.signalrOpts.connectTimeout * 1000);
+    });
 
     client.start();
   }
