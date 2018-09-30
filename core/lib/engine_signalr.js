@@ -321,7 +321,7 @@ class SignalREngine {
         this._addCounter(ee, 'client_timeout', 1, { hub: step.hub });
         callback('timedout', client);
       }
-    });
+    }, this.signalrOpts.connectTimeout * 1000);
 
     client.start();
   }
